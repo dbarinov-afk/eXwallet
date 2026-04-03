@@ -12,33 +12,33 @@ export function Hero({ trackedCount, activeOrders }: HeroProps) {
         <div className="eyebrow">eXwallet / eXw</div>
         <h1>Set the level. Execute on your terms.</h1>
         <p>
-          A trader-first TON wallet experience built around target entries.
-          Watch liquid tokens, define your buy level, and execute with STON.fi
-          the second the market reaches your plan.
+          A TON trading assistant for price alerts. Pick a token, set the level
+          you care about, and let eXwallet watch the market until it is time to
+          execute with STON.fi.
         </p>
         <div className="hero-actions">
           <TonConnectButton />
           <div className="status-pill">
             <span className="status-dot" />
-            Monitoring {activeOrders} target order{activeOrders === 1 ? "" : "s"}
+            Monitoring {activeOrders} live alert{activeOrders === 1 ? "" : "s"}
           </div>
         </div>
       </div>
       <div className="hero-shell">
         <div className="shell-header">
-          <span>TRADER TERMINAL</span>
-          <span>{trackedCount} liquid assets tracked</span>
+          <span>LIVE OVERVIEW</span>
+          <span>{trackedCount} tokens tracked</span>
         </div>
         <div className="shell-grid">
           <div className="shell-metric">
-            <span>Signal</span>
-            <strong>Target entries</strong>
-            <p>Off-chain watch, user-signed execution</p>
+            <span>Mode</span>
+            <strong>Price alerts</strong>
+            <p>Buy-below and sell-above levels in USD</p>
           </div>
           <div className="shell-metric">
-            <span>Route</span>
+            <span>Execution</span>
             <strong>STON.fi</strong>
-            <p>Quotes, routing, and swap payloads</p>
+            <p>Open swap flow only when the alert is triggered</p>
           </div>
           <div className="shell-metric">
             <span>Wallet</span>
@@ -50,4 +50,3 @@ export function Hero({ trackedCount, activeOrders }: HeroProps) {
     </section>
   );
 }
-

@@ -121,6 +121,44 @@ button {
   margin-top: 1.4rem;
 }
 
+.hero-steps {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 1.2rem;
+}
+
+.hero-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.8rem;
+  align-items: center;
+  padding: 0.75rem 0.9rem;
+  border-radius: 1rem;
+  background: rgba(10, 14, 23, 0.72);
+  border: 1px solid rgba(123, 142, 177, 0.14);
+}
+
+.hero-step span {
+  display: grid;
+  place-items: center;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(91, 140, 255, 0.4), rgba(124, 184, 255, 0.2));
+  color: #eaf1ff;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.hero-step strong,
+.hero-step small {
+  display: block;
+}
+
+.hero-step small {
+  color: #9db0d9;
+}
+
 .status-pill,
 .status-chip {
   display: inline-flex;
@@ -236,6 +274,50 @@ button {
   color: #dce7ff;
 }
 
+.spotlight-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding: 1.1rem 1.2rem;
+  border-radius: 1.25rem;
+  border: 1px solid rgba(49, 208, 170, 0.3);
+  background:
+    linear-gradient(135deg, rgba(49, 208, 170, 0.12), rgba(91, 140, 255, 0.12)),
+    rgba(8, 11, 18, 0.9);
+  box-shadow: 0 0 0 1px rgba(49, 208, 170, 0.08), 0 20px 60px rgba(10, 20, 28, 0.45);
+  animation: spotlightPulse 1.8s ease-in-out infinite;
+}
+
+.spotlight-copy h2 {
+  margin: 0.2rem 0 0.45rem;
+}
+
+.spotlight-copy p:last-child {
+  margin-bottom: 0;
+}
+
+.spotlight-actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+@keyframes spotlightPulse {
+  0%,
+  100% {
+    transform: translateY(0);
+    box-shadow: 0 0 0 1px rgba(49, 208, 170, 0.08), 0 20px 60px rgba(10, 20, 28, 0.45);
+  }
+
+  50% {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 1px rgba(49, 208, 170, 0.2), 0 24px 70px rgba(10, 20, 28, 0.52);
+  }
+}
+
 .dashboard-grid {
   margin-top: 1rem;
   grid-template-columns: 0.9fr 1.1fr;
@@ -256,6 +338,32 @@ button {
 .order-list {
   display: grid;
   gap: 0.85rem;
+}
+
+.portfolio-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin: 1rem 0;
+}
+
+.portfolio-summary > div {
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  background: rgba(10, 14, 23, 0.82);
+  border: 1px solid rgba(123, 142, 177, 0.12);
+}
+
+.summary-label {
+  display: block;
+  color: #92a5ce;
+  font-size: 0.76rem;
+}
+
+.portfolio-summary strong {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 1.05rem;
 }
 
 .asset-row,
@@ -315,6 +423,29 @@ button {
   color: #adc0e8;
   background: rgba(10, 14, 23, 0.82);
   border: 1px dashed rgba(123, 142, 177, 0.22);
+}
+
+.hint-card {
+  margin: 1rem 0 0.2rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(123, 142, 177, 0.14);
+  background: rgba(10, 14, 23, 0.82);
+  overflow: hidden;
+}
+
+.hint-card summary {
+  padding: 0.95rem 1rem;
+  cursor: pointer;
+  color: #dce7ff;
+  font-weight: 600;
+}
+
+.hint-copy {
+  padding: 0 1rem 1rem;
+}
+
+.hint-copy p {
+  margin: 0.35rem 0;
 }
 
 .composer {
@@ -452,6 +583,26 @@ button {
   align-items: center;
 }
 
+.order-status-group,
+.alert-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.side-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  border-radius: 999px;
+  padding: 0.55rem 0.8rem;
+  background: rgba(91, 140, 255, 0.08);
+  border: 1px solid rgba(91, 140, 255, 0.18);
+  color: #cfe0ff;
+  font-size: 0.82rem;
+}
+
 .order-topline div span {
   color: #92a5ce;
   font-size: 0.82rem;
@@ -499,6 +650,13 @@ button {
   border: 1px solid rgba(49, 208, 170, 0.18);
 }
 
+.alert-time {
+  display: block;
+  margin-top: 0.35rem;
+  color: #90adbe;
+  font-size: 0.78rem;
+}
+
 .widget-backdrop {
   position: fixed;
   inset: 0;
@@ -532,16 +690,21 @@ button {
   .shell-grid,
   .watch-grid,
   .notes-grid,
-  .order-grid {
+  .order-grid,
+  .portfolio-summary {
     grid-template-columns: 1fr;
   }
 
   .meta-bar,
   .panel-header,
   .panel-actions,
+  .spotlight-alert,
+  .spotlight-actions,
   .composer-actions,
   .order-footer,
   .alert-card,
+  .alert-actions,
+  .order-status-group,
   .order-actions,
   .token-picked {
     flex-direction: column;

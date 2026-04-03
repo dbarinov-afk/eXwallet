@@ -44,7 +44,7 @@ export function OrderBoard({
       <div className="panel-header">
         <div>
           <p className="section-label">Monitor</p>
-          <h2>Active target orders</h2>
+          <h2>Active price alerts</h2>
         </div>
         <span className="section-note">
           {refreshing ? "Syncing market..." : "Auto-sync every 20s"}
@@ -52,7 +52,7 @@ export function OrderBoard({
       </div>
       {orders.length === 0 ? (
         <div className="empty-state">
-          Arm your first buy-low or sell-high order to start live monitoring.
+          Save your first buy-below or sell-above alert to start live monitoring.
         </div>
       ) : (
         <div className="order-list">
@@ -65,16 +65,17 @@ export function OrderBoard({
                   </strong>
                   <span>{formatRelativeTime(order.createdAt)}</span>
                 </div>
-                <span className={statusClass(order)}>{statusLabel(order)}</span>
+                <div className="order-status-group">
+                  <span className="side-chip">
+                    {order.side === "buy" ? "Buy low" : "Sell high"}
+                  </span>
+                  <span className={statusClass(order)}>{statusLabel(order)}</span>
+                </div>
               </div>
               <div className="order-grid">
                 <div>
-                  <span>{order.side === "buy" ? "Budget" : "Amount"}</span>
-                  <strong>
-                    {order.side === "buy"
-                      ? `$${formatNumber(order.inputAmount)}`
-                      : `${formatNumber(order.inputAmount)} ${order.inputSymbol}`}
-                  </strong>
+                  <span>Condition</span>
+                  <strong>{order.side === "buy" ? "Price below" : "Price above"}</strong>
                 </div>
                 <div>
                   <span>Target</span>
@@ -89,9 +90,9 @@ export function OrderBoard({
                   </strong>
                 </div>
                 <div>
-                  <span>Route</span>
+                  <span>Next action</span>
                   <strong>
-                    {order.simulation ? "Validated" : "On trigger"}
+                    {order.status === "triggered" ? "Execute in STON" : "Keep watching"}
                   </strong>
                 </div>
               </div>

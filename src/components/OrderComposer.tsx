@@ -9,13 +9,8 @@ type ComposerProps = {
   setOrderSide: (value: OrderSide) => void;
   selectedAssetAddress: string;
   setSelectedAssetAddress: (value: string) => void;
-  buyBudgetUsd: string;
-  setBuyBudgetUsd: (value: string) => void;
-  sellAmount: string;
-  setSellAmount: (value: string) => void;
   targetPrice: string;
   setTargetPrice: (value: string) => void;
-  tonUsdPrice: number;
   spotPriceUsd?: number;
   targetWarning?: string;
   currentQuote?: QuoteSnapshot;
@@ -29,31 +24,36 @@ export function OrderComposer({
   setOrderSide,
   selectedAssetAddress,
   setSelectedAssetAddress,
-  buyBudgetUsd,
-  setBuyBudgetUsd,
-  sellAmount,
-  setSellAmount,
   targetPrice,
   setTargetPrice,
-  tonUsdPrice,
   spotPriceUsd,
   targetWarning,
   currentQuote,
   quoteError,
   onSubmit,
 }: ComposerProps) {
+  const selectedAsset = assets.find((asset) => asset.contractAddress === selectedAssetAddress);
+
   return (
     <section className="panel">
       <div className="panel-header">
         <div>
-          <p className="section-label">Target Order</p>
-          <h2>Arm a monitored trade</h2>
+          <p className="section-label">Alert Builder</p>
+          <h2>Create a price alert</h2>
         </div>
-        <span className="section-note">Save once, monitor automatically</span>
+        <span className="section-note">Save once, auto-monitor every 20s</span>
       </div>
+      <details className="hint-card">
+        <summary>How alerts work</summary>
+        <div className="hint-copy">
+          <p>Choose a token, set buy below or sell above, and save the target price in USD.</p>
+          <p>eXwallet watches the market in the background and raises a browser alert when the level is hit.</p>
+          <p>Execution still happens through STON.fi and Tonkeeper, so your wallet stays in control.</p>
+        </div>
+      </details>
       <form className="composer" onSubmit={onSubmit}>
         <label>
-          Order side
+          Alert type
           <div className="segmented">
             <button
               className={orderSide === "buy" ? "segment-active" : "segment-button"}
@@ -70,9 +70,14 @@ export function OrderComposer({
               Sell high
             </button>
           </div>
+          <span className="field-hint">
+            {orderSide === "buy"
+              ? "Notify me when price drops to this level."
+              : "Notify me when price rises to this level."}
+          </span>
         </label>
         <label>
-          {orderSide === "buy" ? "Buy token" : "Sell token"}
+          Token
           <select
             disabled={assets.length === 0}
             value={selectedAssetAddress}
@@ -83,7 +88,10 @@ export function OrderComposer({
             ) : (
               assets.map((asset) => (
                 <option key={asset.contractAddress} value={asset.contractAddress}>
-                  {getAssetSymbol(asset)} · {getAssetName(asset)}
+                  {getAssetSymbol(asset)} · {getAssetName(asset)} · $
+                  {formatNumber(
+                    Number(asset.dexPriceUsd || asset.thirdPartyPriceUsd || 0) || 0,
+                  )}
                 </option>
               ))
             )}
@@ -92,37 +100,21 @@ export function OrderComposer({
         {selectedAssetAddress ? (
           <div className="token-picked">
             <div className="token-picked-symbol">
-              {assets.find((asset) => asset.contractAddress === selectedAssetAddress)?.meta?.imageUrl ? (
+              {selectedAsset?.meta?.imageUrl ? (
                 <img
                   className="asset-icon"
-                  src={assets.find((asset) => asset.contractAddress === selectedAssetAddress)?.meta?.imageUrl}
-                  alt={`${assets.find((asset) => asset.contractAddress === selectedAssetAddress)?.meta?.symbol || "token"} icon`}
+                  src={selectedAsset.meta.imageUrl}
+                  alt={`${selectedAsset.meta?.symbol || "token"} icon`}
                 />
               ) : (
                 <div className="watch-symbol">
-                  {assets.find((asset) => asset.contractAddress === selectedAssetAddress)
-                    ? getAssetSymbol(
-                        assets.find((asset) => asset.contractAddress === selectedAssetAddress)!,
-                      )
-                    : "TK"}
+                  {selectedAsset ? getAssetSymbol(selectedAsset) : "TK"}
                 </div>
               )}
             </div>
             <div className="token-picked-copy">
-              <strong>
-                {assets.find((asset) => asset.contractAddress === selectedAssetAddress)
-                  ? getAssetSymbol(
-                      assets.find((asset) => asset.contractAddress === selectedAssetAddress)!,
-                    )
-                  : "Token"}
-              </strong>
-              <span>
-                {assets.find((asset) => asset.contractAddress === selectedAssetAddress)
-                  ? getAssetName(
-                      assets.find((asset) => asset.contractAddress === selectedAssetAddress)!,
-                    )
-                  : ""}
-              </span>
+              <strong>{selectedAsset ? getAssetSymbol(selectedAsset) : "Token"}</strong>
+              <span>{selectedAsset ? getAssetName(selectedAsset) : ""}</span>
               <small className="asset-address">
                 {truncateAddress(selectedAssetAddress)}
               </small>
@@ -135,32 +127,6 @@ export function OrderComposer({
             </div>
           </div>
         ) : null}
-        <label>
-          {orderSide === "buy" ? "Budget (USD)" : "Amount to sell"}
-          {orderSide === "buy" ? (
-            <>
-              <input
-                inputMode="decimal"
-                placeholder="10"
-                value={buyBudgetUsd}
-                onChange={(event) => setBuyBudgetUsd(event.target.value)}
-              />
-              {tonUsdPrice > 0 && buyBudgetUsd ? (
-                <span className="field-hint">
-                  Approx. {formatNumber(Number(buyBudgetUsd) / tonUsdPrice)} TON at the
-                  current TON/USD rate
-                </span>
-              ) : null}
-            </>
-          ) : (
-            <input
-              inputMode="decimal"
-              placeholder="25"
-              value={sellAmount}
-              onChange={(event) => setSellAmount(event.target.value)}
-            />
-          )}
-        </label>
         <label>
           Target price (USD / token)
           <input
@@ -178,7 +144,7 @@ export function OrderComposer({
         </label>
         <div className="composer-actions">
           <button className="primary-button" type="submit" disabled={assets.length === 0}>
-            Arm target order
+            Save alert
           </button>
         </div>
       </form>
@@ -197,15 +163,15 @@ export function OrderComposer({
                 <strong>${formatNumber(currentQuote.priceUsdPerToken)}</strong>
               </div>
               <div>
-                <span>Trigger side</span>
-                <strong>{orderSide === "buy" ? "Buy low" : "Sell high"}</strong>
+                <span>Alert type</span>
+                <strong>{orderSide === "buy" ? "Buy below" : "Sell above"}</strong>
               </div>
             </div>
           </>
         ) : (
           <p>
-            Save stores your target immediately. The app monitors market price
-            and only requests a STON.fi route when the order is ready to execute.
+            Save stores the alert immediately. eXwallet will keep watching this
+            token and raise an alert when the target price is reached.
           </p>
         )}
       </div>

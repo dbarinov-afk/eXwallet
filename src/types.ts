@@ -46,8 +46,8 @@ export type TargetOrder = {
   createdAt: string;
   side: OrderSide;
   asset: SupportedAsset;
-  inputAmount: number;
-  inputSymbol: string;
+  inputAmount?: number;
+  inputSymbol?: string;
   targetPrice: number;
   status: OrderStatus;
   livePriceUsd?: number;

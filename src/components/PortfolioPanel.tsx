@@ -21,6 +21,9 @@ export function PortfolioPanel({
   error,
   onRefresh,
 }: PortfolioPanelProps) {
+  const pricedTotal = portfolio.reduce((sum, entry) => sum + (entry.usdValue || 0), 0);
+  const pricedCount = portfolio.filter((entry) => entry.usdValue && entry.usdValue > 0).length;
+
   return (
     <section className="panel">
       <div className="panel-header">
@@ -40,10 +43,26 @@ export function PortfolioPanel({
           </button>
         </div>
       </div>
+      {connected && portfolio.length > 0 ? (
+        <div className="portfolio-summary">
+          <div>
+            <span className="summary-label">Tracked assets</span>
+            <strong>{portfolio.length}</strong>
+          </div>
+          <div>
+            <span className="summary-label">Priced assets</span>
+            <strong>{pricedCount}</strong>
+          </div>
+          <div>
+            <span className="summary-label">Estimated value</span>
+            <strong>{pricedTotal > 0 ? formatCurrency(pricedTotal) : "Waiting for USD feeds"}</strong>
+          </div>
+        </div>
+      ) : null}
       {!connected ? (
         <div className="empty-state">
-          Connect Tonkeeper to load balances, recent exposure, and trade-ready
-          assets.
+          Connect Tonkeeper to load balances, token icons, and your trade-ready
+          wallet snapshot.
         </div>
       ) : loading ? (
         <div className="empty-state">Loading balances from TON…</div>

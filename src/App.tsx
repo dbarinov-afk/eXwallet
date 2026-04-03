@@ -6,12 +6,11 @@ import { OrderBoard } from "./components/OrderBoard";
 import { OrderComposer } from "./components/OrderComposer";
 import { PortfolioPanel } from "./components/PortfolioPanel";
 import { SwapWidgetModal } from "./components/SwapWidgetModal";
-import { formatNumber, truncateAddress } from "./lib/format";
+import { formatNumber, formatRelativeTime, truncateAddress } from "./lib/format";
 import {
   getDefaultAssetAddress,
   getAssetSymbol,
   getLiquidAssets,
-  getAssetName,
 } from "./lib/ston";
 import { getPortfolio } from "./lib/tonapi";
 import {
@@ -30,6 +29,47 @@ import type {
   TargetOrder,
   TriggerAlert,
 } from "./types";
+
+function playAlertCue() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextCtor) {
+      return;
+    }
+
+    const context = new AudioContextCtor();
+    const now = context.currentTime;
+    const gain = context.createGain();
+    gain.connect(context.destination);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.9);
+
+    const oscillator = context.createOscillator();
+    oscillator.type = "sawtooth";
+    oscillator.frequency.setValueAtTime(740, now);
+    oscillator.frequency.exponentialRampToValueAtTime(1180, now + 0.24);
+    oscillator.frequency.exponentialRampToValueAtTime(680, now + 0.48);
+    oscillator.frequency.exponentialRampToValueAtTime(1040, now + 0.82);
+    oscillator.connect(gain);
+    oscillator.start(now);
+    oscillator.stop(now + 0.9);
+
+    oscillator.onended = () => {
+      void context.close();
+    };
+
+    if ("vibrate" in navigator) {
+      navigator.vibrate([180, 120, 220]);
+    }
+  } catch (error) {
+    console.error("Failed to play alert cue", error);
+  }
+}
 
 function deriveStatus(side: OrderSide, livePrice: number, targetPrice: number) {
   const isTriggered = side === "buy" ? livePrice <= targetPrice : livePrice >= targetPrice;
@@ -72,8 +112,6 @@ export default function App() {
   const [assetsLoading, setAssetsLoading] = useState(true);
   const [orderSide, setOrderSide] = useState<OrderSide>("sell");
   const [selectedAssetAddress, setSelectedAssetAddress] = useState("");
-  const [buyBudgetUsd, setBuyBudgetUsd] = useState("10");
-  const [sellAmount, setSellAmount] = useState("10");
   const [targetPrice, setTargetPrice] = useState("");
   const [orders, setOrders] = useState<TargetOrder[]>(() => loadOrders());
   const [currentQuote, setCurrentQuote] = useState<QuoteSnapshot>();
@@ -84,6 +122,7 @@ export default function App() {
   const [tonUsdPrice, setTonUsdPrice] = useState<number>(0);
   const [alerts, setAlerts] = useState<TriggerAlert[]>([]);
   const [networkWarning, setNetworkWarning] = useState<string>();
+  const [spotlightAlert, setSpotlightAlert] = useState<TriggerAlert | null>(null);
 
   const connected = Boolean(address);
 
@@ -91,14 +130,6 @@ export default function App() {
     () => assets.find((asset) => asset.contractAddress === selectedAssetAddress),
     [assets, selectedAssetAddress],
   );
-  const buySpendTon = useMemo(() => {
-    const usd = Number(buyBudgetUsd);
-    if (!Number.isFinite(usd) || usd <= 0 || !tonUsdPrice) {
-      return 0;
-    }
-
-    return usd / tonUsdPrice;
-  }, [buyBudgetUsd, tonUsdPrice]);
   const liveSpotPriceUsd = useMemo(
     () =>
       selectedAsset
@@ -119,11 +150,13 @@ export default function App() {
       return undefined;
     }
 
-    if (orderSide === "sell" && target < liveSpotPriceUsd) {
+    const tolerance = liveSpotPriceUsd * 0.001;
+
+    if (orderSide === "sell" && target < liveSpotPriceUsd - tolerance) {
       return "Warning: this sell target is below the current market price, so it may trigger immediately.";
     }
 
-    if (orderSide === "buy" && target > liveSpotPriceUsd) {
+    if (orderSide === "buy" && target > liveSpotPriceUsd + tolerance) {
       return "Warning: this buy target is above the current market price, so it may trigger immediately.";
     }
 
@@ -206,7 +239,7 @@ export default function App() {
     if (liveSpotPriceUsd && !targetPrice) {
       setTargetPrice(liveSpotPriceUsd.toFixed(4));
     }
-  }, [selectedAsset, buyBudgetUsd, sellAmount, orderSide, liveSpotPriceUsd, tonUsdPrice]);
+  }, [selectedAsset, orderSide, liveSpotPriceUsd, targetPrice, tonUsdPrice]);
 
   useEffect(() => {
     if (orders.length === 0) {
@@ -356,6 +389,8 @@ export default function App() {
       });
       if (nextAlerts.length > 0) {
         setExecutionMessage(nextAlerts[0].body);
+        setSpotlightAlert(nextAlerts[0]);
+        playAlertCue();
         if (typeof window !== "undefined" && "Notification" in window) {
           if (Notification.permission === "granted") {
             nextAlerts.forEach((alert) => new Notification(alert.title, { body: alert.body }));
@@ -377,26 +412,10 @@ export default function App() {
       return;
     }
 
-    const inputAmount = orderSide === "buy" ? Number(buyBudgetUsd) : Number(sellAmount);
-    const executionAmount = orderSide === "buy" ? buySpendTon : inputAmount;
     const target = Number(targetPrice);
-
-    if (!Number.isFinite(inputAmount) || inputAmount <= 0) {
-      setQuoteError(
-        orderSide === "buy"
-          ? "Budget must be greater than zero."
-          : "Sell amount must be greater than zero.",
-      );
-      return;
-    }
 
     if (!Number.isFinite(target) || target <= 0) {
       setQuoteError("Target price must be greater than zero.");
-      return;
-    }
-
-    if (!Number.isFinite(executionAmount) || executionAmount <= 0) {
-      setQuoteError("Order amount could not be converted into a valid trade size.");
       return;
     }
 
@@ -411,8 +430,6 @@ export default function App() {
       createdAt: new Date().toISOString(),
       side: orderSide,
       asset: selectedAsset,
-      inputAmount,
-      inputSymbol: orderSide === "buy" ? "USD" : getAssetSymbol(selectedAsset),
       targetPrice: target,
       livePriceUsd: livePriceUsd || undefined,
       quote,
@@ -421,15 +438,15 @@ export default function App() {
         : "watching",
       note:
         orderSide === "buy"
-          ? `Armed to buy ${getAssetSymbol(selectedAsset)} (${getAssetName(selectedAsset)}) when price falls to $${formatNumber(target)}.`
-          : `Armed to sell ${getAssetSymbol(selectedAsset)} (${getAssetName(selectedAsset)}) when price rises to $${formatNumber(target)}.`,
+          ? `Alert armed: ${getAssetSymbol(selectedAsset)} at or below $${formatNumber(target)}.`
+          : `Alert armed: ${getAssetSymbol(selectedAsset)} at or above $${formatNumber(target)}.`,
     };
 
     startTransition(() => {
       setOrders((current) => [newOrder, ...current]);
     });
     setExecutionMessage(
-      `${orderSide === "buy" ? "Buy" : "Sell"} order armed for ${getAssetSymbol(selectedAsset)}.`,
+      `${orderSide === "buy" ? "Buy-below" : "Sell-above"} alert armed for ${getAssetSymbol(selectedAsset)}.`,
     );
   }
 
@@ -460,9 +477,15 @@ export default function App() {
 
   function dismissAlert(alertId: string) {
     setAlerts((current) => current.filter((alert) => alert.id !== alertId));
+    setSpotlightAlert((current) => (current?.id === alertId ? null : current));
   }
 
   const heroOrders = orders.filter((order) => order.status !== "executed").length;
+  const triggeredCount = orders.filter((order) => order.status === "triggered").length;
+  const trackedTokens = pricedAssets.length;
+  const spotlightOrder = spotlightAlert
+    ? orders.find((order) => order.id === spotlightAlert.orderId)
+    : undefined;
 
   return (
     <div className="app-shell">
@@ -473,25 +496,44 @@ export default function App() {
 
         <section className="meta-bar">
           <div>
-            <span className="meta-label">Connection</span>
+            <span className="meta-label">Wallet</span>
             <strong>{connected ? truncateAddress(address) : "Wallet not connected"}</strong>
           </div>
           <div>
-            <span className="meta-label">Primary flow</span>
-            <strong>USD target monitor → quote → execute</strong>
+            <span className="meta-label">Tracked tokens</span>
+            <strong>{trackedTokens}</strong>
           </div>
           <div>
-            <span className="meta-label">Execution rail</span>
-            <strong>STON.fi + Tonkeeper + AppKit</strong>
+            <span className="meta-label">Triggered alerts</span>
+            <strong>{triggeredCount}</strong>
           </div>
           <div>
-            <span className="meta-label">TON market</span>
+            <span className="meta-label">TON / USD</span>
             <strong>{tonUsdPrice ? `$${formatNumber(tonUsdPrice)}` : "Loading USD..."}</strong>
           </div>
         </section>
 
         {executionMessage && <div className="banner">{executionMessage}</div>}
         {networkWarning ? <div className="banner">{networkWarning}</div> : null}
+        {spotlightAlert && spotlightOrder ? (
+          <section className="spotlight-alert">
+            <div className="spotlight-copy">
+              <p className="section-label">Triggered Alert</p>
+              <h2>
+                {getAssetSymbol(spotlightOrder.asset)} hit your {spotlightOrder.side === "buy" ? "buy-below" : "sell-above"} level
+              </h2>
+              <p>{spotlightAlert.body}</p>
+            </div>
+            <div className="spotlight-actions">
+              <button className="primary-button" type="button" onClick={() => void handleExecute(spotlightOrder)}>
+                Execute now
+              </button>
+              <button className="ghost-button" type="button" onClick={() => dismissAlert(spotlightAlert.id)}>
+                Dismiss
+              </button>
+            </div>
+          </section>
+        ) : null}
         {alerts.length > 0 ? (
           <section className="panel">
             <div className="panel-header">
@@ -507,10 +549,27 @@ export default function App() {
                   <div>
                     <strong>{alert.title}</strong>
                     <p>{alert.body}</p>
+                    <span className="alert-time">{formatRelativeTime(alert.createdAt)}</span>
                   </div>
-                  <button className="ghost-button" type="button" onClick={() => dismissAlert(alert.id)}>
-                    Dismiss
-                  </button>
+                  <div className="alert-actions">
+                    {orders.find((order) => order.id === alert.orderId)?.status === "triggered" ? (
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={() => {
+                          const order = orders.find((item) => item.id === alert.orderId);
+                          if (order) {
+                            void handleExecute(order);
+                          }
+                        }}
+                      >
+                        Execute
+                      </button>
+                    ) : null}
+                    <button className="ghost-button" type="button" onClick={() => dismissAlert(alert.id)}>
+                      Dismiss
+                    </button>
+                  </div>
                 </article>
               ))}
             </div>
@@ -531,13 +590,8 @@ export default function App() {
             setOrderSide={setOrderSide}
             selectedAssetAddress={selectedAssetAddress}
             setSelectedAssetAddress={setSelectedAssetAddress}
-            buyBudgetUsd={buyBudgetUsd}
-            setBuyBudgetUsd={setBuyBudgetUsd}
-            sellAmount={sellAmount}
-            setSellAmount={setSellAmount}
             targetPrice={targetPrice}
             setTargetPrice={setTargetPrice}
-            tonUsdPrice={tonUsdPrice}
             spotPriceUsd={liveSpotPriceUsd}
             targetWarning={targetWarning}
             currentQuote={currentQuote}
@@ -575,14 +629,14 @@ export default function App() {
             <div>
               <strong>Trader-first UX</strong>
               <p>
-                This is intentionally framed as a smart execution assistant,
-                not a generic wallet clone.
+                This is intentionally framed as a trading alert assistant, not
+                a generic wallet clone.
               </p>
             </div>
             <div>
               <strong>Safe promise</strong>
               <p>
-                Orders are monitored off-chain and the user still signs the
+                Alerts are monitored off-chain and the user still signs the
                 final swap in wallet.
               </p>
             </div>
