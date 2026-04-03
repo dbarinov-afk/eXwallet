@@ -32,6 +32,27 @@ select {
 
 button {
   cursor: pointer;
+  transition:
+    transform 140ms ease,
+    box-shadow 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease,
+    opacity 180ms ease;
+  will-change: transform;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(1px) scale(0.985);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  transform: none;
 }
 
 .app-shell {
@@ -100,7 +121,7 @@ button {
   font-size: clamp(2.6rem, 7vw, 4.9rem);
   line-height: 0.94;
   letter-spacing: -0.05em;
-  max-width: 10ch;
+  max-width: 16ch;
 }
 
 .hero-copy p,
@@ -402,6 +423,36 @@ button {
   margin: 0.35rem 0;
 }
 
+.chart-card {
+  margin-top: 0;
+}
+
+.chart-copy {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.chart-shell,
+.chart-shell .tradingview-widget-container {
+  width: 100%;
+  min-height: 420px;
+}
+
+.chart-shell .tradingview-widget-container__widget {
+  height: 380px;
+}
+
+.chart-shell .tradingview-widget-copyright {
+  margin-top: 0.55rem;
+  font-size: 0.76rem;
+  color: #92a5ce;
+}
+
+.chart-shell .tradingview-widget-copyright a {
+  color: #9ab0db;
+  text-decoration: none;
+}
+
 .builder-highlight {
   margin-top: 1rem;
   padding: 0.95rem 1rem;
@@ -541,6 +592,7 @@ button {
 .segment-active {
   background: linear-gradient(135deg, rgba(91, 140, 255, 0.24), rgba(124, 184, 255, 0.18));
   border-color: rgba(91, 140, 255, 0.42);
+  box-shadow: 0 12px 26px rgba(91, 140, 255, 0.16);
 }
 
 .field-hint {
@@ -767,6 +819,13 @@ button {
   align-items: center;
 }
 
+.order-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+}
+
 .order-status-group,
 .alert-actions {
   display: flex;
@@ -794,7 +853,7 @@ button {
 
 .order-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.75rem;
 }
 

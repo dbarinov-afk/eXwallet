@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import type { OrderSide, QuoteSnapshot, SupportedAsset } from "../types";
 import { formatNumber, truncateAddress } from "../lib/format";
 import { getAssetName, getAssetSymbol } from "../lib/ston";
+import { ChartSection } from "./ChartSection";
 
 type ComposerProps = {
   assets: SupportedAsset[];
@@ -148,6 +149,12 @@ export function OrderComposer({
               <span>Current price</span>
             </div>
           </div>
+        ) : null}
+        {selectedAsset ? (
+          <ChartSection
+            symbol={getAssetSymbol(selectedAsset)}
+            title={getAssetName(selectedAsset)}
+          />
         ) : null}
         <label>
           Target price (USD / token)

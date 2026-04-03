@@ -9,10 +9,10 @@ export function Hero({ activeOrders }: HeroProps) {
     <section className="hero-card">
       <div className="hero-copy">
         <div className="eyebrow">eXwallet / eXw</div>
-        <h1>TON alerts that feel instant.</h1>
+        <h1>Set a TON price alert and act when it hits.</h1>
         <p>
-          Track TON tokens, set price alarms in seconds, and jump into STON.fi
-          the moment the market reaches your level.
+          Track TON tokens, save buy-below or sell-above levels, and open STON.fi
+          right when the market reaches your target.
         </p>
         <div className="hero-actions">
           <TonConnectButton />

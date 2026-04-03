@@ -32,6 +32,27 @@ function statusClass(order: TargetOrder) {
   );
 }
 
+function distanceToTrigger(order: TargetOrder) {
+  if (!order.livePriceUsd || !order.targetPrice) {
+    return undefined;
+  }
+
+  if (order.status === "triggered") {
+    return "At target";
+  }
+
+  const delta =
+    order.side === "buy"
+      ? ((order.livePriceUsd - order.targetPrice) / order.livePriceUsd) * 100
+      : ((order.targetPrice - order.livePriceUsd) / order.livePriceUsd) * 100;
+
+  if (!Number.isFinite(delta)) {
+    return undefined;
+  }
+
+  return `${formatNumber(Math.abs(delta), { maximumFractionDigits: 2 })}% away`;
+}
+
 export function OrderBoard({
   connected,
   orders,
@@ -59,7 +80,7 @@ export function OrderBoard({
           {orders.map((order) => (
             <article className="order-card" key={order.id}>
               <div className="order-topline">
-                <div>
+                <div className="order-title">
                   <strong>
                     {order.side === "buy" ? "Buy" : "Sell"} {getAssetSymbol(order.asset)}
                   </strong>
@@ -88,6 +109,10 @@ export function OrderBoard({
                       ? `$${formatNumber(order.livePriceUsd)}`
                       : "Waiting"}
                   </strong>
+                </div>
+                <div>
+                  <span>Distance</span>
+                  <strong>{distanceToTrigger(order) || "Waiting"}</strong>
                 </div>
                 <div>
                   <span>Next action</span>
