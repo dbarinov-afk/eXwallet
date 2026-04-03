@@ -1,4 +1,4 @@
-import { startTransition, useEffect, useMemo, useState, type FormEvent } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTonAddress, useTonConnectUI } from "@tonconnect/ui-react";
 import { Hero } from "./components/Hero";
 import { MarketPulse } from "./components/MarketPulse";
@@ -165,6 +165,7 @@ export default function App() {
   const [alertSettings, setAlertSettings] = useState<AlertPreferences>(() => loadAlertSettings());
   const [networkWarning, setNetworkWarning] = useState<string>();
   const [spotlightAlert, setSpotlightAlert] = useState<TriggerAlert | null>(null);
+  const previousSelectedAssetAddressRef = useRef<string>("");
 
   const connected = Boolean(address);
 
@@ -292,9 +293,14 @@ export default function App() {
   useEffect(() => {
     setCurrentQuote(selectedAsset ? buildSpotQuoteSnapshot(selectedAsset, tonUsdPrice) : undefined);
     setQuoteError(undefined);
-    if (liveSpotPriceUsd && !targetPrice) {
+    const selectedAssetChanged =
+      previousSelectedAssetAddressRef.current !== selectedAssetAddress;
+
+    if (liveSpotPriceUsd && (!targetPrice || selectedAssetChanged)) {
       setTargetPrice(liveSpotPriceUsd.toFixed(4));
     }
+
+    previousSelectedAssetAddressRef.current = selectedAssetAddress;
   }, [selectedAsset, orderSide, liveSpotPriceUsd, targetPrice, tonUsdPrice]);
 
   useEffect(() => {
