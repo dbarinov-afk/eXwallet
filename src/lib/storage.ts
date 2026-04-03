@@ -1,8 +1,23 @@
-import type { PortfolioEntry, SupportedAsset, TargetOrder } from "../types";
+import type {
+  AlertPreferences,
+  PortfolioEntry,
+  SupportedAsset,
+  TargetOrder,
+  TriggerAlert,
+} from "../types";
 
 const STORAGE_KEY = "exwallet.target-orders";
 const ASSET_CACHE_KEY = "exwallet.cached-assets";
 const PORTFOLIO_CACHE_PREFIX = "exwallet.cached-portfolio";
+const ALERT_SETTINGS_KEY = "exwallet.alert-settings";
+const ALERT_HISTORY_KEY = "exwallet.alert-history";
+
+const DEFAULT_ALERT_SETTINGS: AlertPreferences = {
+  browser: true,
+  sound: true,
+  vibration: true,
+  spotlight: true,
+};
 
 export function loadOrders(): TargetOrder[] {
   if (typeof window === "undefined") {
@@ -100,4 +115,61 @@ export function saveCachedPortfolio(address: string, entries: PortfolioEntry[]) 
       entries,
     }),
   );
+}
+
+export function loadAlertSettings(): AlertPreferences {
+  if (typeof window === "undefined") {
+    return DEFAULT_ALERT_SETTINGS;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(ALERT_SETTINGS_KEY);
+    if (!raw) {
+      return DEFAULT_ALERT_SETTINGS;
+    }
+
+    const parsed = JSON.parse(raw) as Partial<AlertPreferences>;
+    return {
+      browser: parsed.browser ?? DEFAULT_ALERT_SETTINGS.browser,
+      sound: parsed.sound ?? DEFAULT_ALERT_SETTINGS.sound,
+      vibration: parsed.vibration ?? DEFAULT_ALERT_SETTINGS.vibration,
+      spotlight: parsed.spotlight ?? DEFAULT_ALERT_SETTINGS.spotlight,
+    };
+  } catch {
+    return DEFAULT_ALERT_SETTINGS;
+  }
+}
+
+export function saveAlertSettings(settings: AlertPreferences) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(ALERT_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+export function loadAlertHistory(): TriggerAlert[] {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(ALERT_HISTORY_KEY);
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as TriggerAlert[];
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveAlertHistory(alerts: TriggerAlert[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(ALERT_HISTORY_KEY, JSON.stringify(alerts.slice(0, 12)));
 }

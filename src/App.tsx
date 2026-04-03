@@ -14,14 +14,19 @@ import {
 } from "./lib/ston";
 import { getPortfolio } from "./lib/tonapi";
 import {
+  loadAlertHistory,
+  loadAlertSettings,
   loadCachedAssets,
   loadCachedPortfolio,
   loadOrders,
+  saveAlertHistory,
+  saveAlertSettings,
   saveCachedAssets,
   saveCachedPortfolio,
   saveOrders,
 } from "./lib/storage";
 import type {
+  AlertPreferences,
   PortfolioEntry,
   OrderSide,
   QuoteSnapshot,
@@ -30,12 +35,20 @@ import type {
   TriggerAlert,
 } from "./types";
 
-function playAlertCue() {
+function playAlertCue(settings: AlertPreferences) {
   if (typeof window === "undefined") {
     return;
   }
 
   try {
+    if (settings.vibration && "vibrate" in navigator) {
+      navigator.vibrate([180, 120, 220]);
+    }
+
+    if (!settings.sound) {
+      return;
+    }
+
     const AudioContextCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextCtor) {
       return;
@@ -62,10 +75,6 @@ function playAlertCue() {
     oscillator.onended = () => {
       void context.close();
     };
-
-    if ("vibrate" in navigator) {
-      navigator.vibrate([180, 120, 220]);
-    }
   } catch (error) {
     console.error("Failed to play alert cue", error);
   }
@@ -102,8 +111,35 @@ function buildSpotQuoteSnapshot(asset: SupportedAsset, tonUsdPrice: number): Quo
   };
 }
 
+function createAlertOrder(params: {
+  asset: SupportedAsset;
+  side: OrderSide;
+  targetPrice: number;
+  tonUsdPrice: number;
+}) {
+  const { asset, side, targetPrice, tonUsdPrice } = params;
+  const livePriceUsd = Number(asset.dexPriceUsd || asset.thirdPartyPriceUsd || 0) || 0;
+  const quote = buildSpotQuoteSnapshot(asset, tonUsdPrice || 0);
+
+  return {
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    side,
+    asset,
+    targetPrice,
+    livePriceUsd: livePriceUsd || undefined,
+    quote,
+    status: livePriceUsd ? deriveStatus(side, livePriceUsd, targetPrice) : "watching",
+    note:
+      side === "buy"
+        ? `Alert armed: ${getAssetSymbol(asset)} at or below $${formatNumber(targetPrice)}.`
+        : `Alert armed: ${getAssetSymbol(asset)} at or above $${formatNumber(targetPrice)}.`,
+  } satisfies TargetOrder;
+}
+
 export default function App() {
   const PORTFOLIO_CACHE_TTL_MS = 2 * 60 * 1000;
+  const [activeView, setActiveView] = useState<"home" | "alerts" | "swap" | "settings">("home");
   const address = useTonAddress();
   const [tonConnectUI] = useTonConnectUI();
   const [assets, setAssets] = useState<SupportedAsset[]>([]);
@@ -113,15 +149,20 @@ export default function App() {
   const [assetsLoading, setAssetsLoading] = useState(true);
   const [orderSide, setOrderSide] = useState<OrderSide>("sell");
   const [selectedAssetAddress, setSelectedAssetAddress] = useState("");
+  const [swapSide] = useState<OrderSide>("buy");
+  const [swapAssetAddress, setSwapAssetAddress] = useState("");
   const [targetPrice, setTargetPrice] = useState("");
   const [orders, setOrders] = useState<TargetOrder[]>(() => loadOrders());
   const [currentQuote, setCurrentQuote] = useState<QuoteSnapshot>();
   const [quoteError, setQuoteError] = useState<string>();
+  const [alarmSuccessMessage, setAlarmSuccessMessage] = useState<string>();
   const [executionMessage, setExecutionMessage] = useState<string>();
   const [widgetOrder, setWidgetOrder] = useState<TargetOrder | null>(null);
   const [syncingOrders, setSyncingOrders] = useState(false);
   const [tonUsdPrice, setTonUsdPrice] = useState<number>(0);
   const [alerts, setAlerts] = useState<TriggerAlert[]>([]);
+  const [alertHistory, setAlertHistory] = useState<TriggerAlert[]>(() => loadAlertHistory());
+  const [alertSettings, setAlertSettings] = useState<AlertPreferences>(() => loadAlertSettings());
   const [networkWarning, setNetworkWarning] = useState<string>();
   const [spotlightAlert, setSpotlightAlert] = useState<TriggerAlert | null>(null);
 
@@ -130,6 +171,10 @@ export default function App() {
   const selectedAsset = useMemo(
     () => assets.find((asset) => asset.contractAddress === selectedAssetAddress),
     [assets, selectedAssetAddress],
+  );
+  const selectedSwapAsset = useMemo(
+    () => assets.find((asset) => asset.contractAddress === swapAssetAddress),
+    [assets, swapAssetAddress],
   );
   const liveSpotPriceUsd = useMemo(
     () =>
@@ -190,6 +235,7 @@ export default function App() {
         );
         if (defaultAddress) {
           setSelectedAssetAddress(defaultAddress);
+          setSwapAssetAddress(defaultAddress);
         } else {
           setQuoteError("No supported tokens with live USD pricing are available right now.");
         }
@@ -201,6 +247,7 @@ export default function App() {
           const defaultAddress = getDefaultAssetAddress(cachedAssets);
           if (defaultAddress) {
             setSelectedAssetAddress(defaultAddress);
+            setSwapAssetAddress(defaultAddress);
           }
           setNetworkWarning("STON.fi is unreachable right now. Showing cached market data.");
         } else {
@@ -223,6 +270,14 @@ export default function App() {
   useEffect(() => {
     saveOrders(orders);
   }, [orders]);
+
+  useEffect(() => {
+    saveAlertSettings(alertSettings);
+  }, [alertSettings]);
+
+  useEffect(() => {
+    saveAlertHistory(alertHistory);
+  }, [alertHistory]);
 
   useEffect(() => {
     if (!connected) {
@@ -403,13 +458,16 @@ export default function App() {
         setOrders(nextOrders);
         if (nextAlerts.length > 0) {
           setAlerts((current) => [...nextAlerts, ...current].slice(0, 6));
+          setAlertHistory((current) => [...nextAlerts, ...current].slice(0, 12));
         }
       });
       if (nextAlerts.length > 0) {
         setExecutionMessage(nextAlerts[0].body);
-        setSpotlightAlert(nextAlerts[0]);
-        playAlertCue();
-        if (typeof window !== "undefined" && "Notification" in window) {
+        if (alertSettings.spotlight) {
+          setSpotlightAlert(nextAlerts[0]);
+        }
+        playAlertCue(alertSettings);
+        if (alertSettings.browser && typeof window !== "undefined" && "Notification" in window) {
           if (Notification.permission === "granted") {
             nextAlerts.forEach((alert) => new Notification(alert.title, { body: alert.body }));
           } else if (Notification.permission === "default") {
@@ -437,34 +495,50 @@ export default function App() {
       return;
     }
 
-    const livePriceUsd =
-      Number(selectedAsset.dexPriceUsd || selectedAsset.thirdPartyPriceUsd || 0) || 0;
     const quote = buildSpotQuoteSnapshot(selectedAsset, tonUsdPrice || 0);
     setCurrentQuote(quote);
     setQuoteError(undefined);
 
-    const newOrder: TargetOrder = {
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      side: orderSide,
+    const newOrder = createAlertOrder({
       asset: selectedAsset,
+      side: orderSide,
       targetPrice: target,
-      livePriceUsd: livePriceUsd || undefined,
-      quote,
-      status: livePriceUsd
-        ? deriveStatus(orderSide, livePriceUsd, target)
-        : "watching",
-      note:
-        orderSide === "buy"
-          ? `Alert armed: ${getAssetSymbol(selectedAsset)} at or below $${formatNumber(target)}.`
-          : `Alert armed: ${getAssetSymbol(selectedAsset)} at or above $${formatNumber(target)}.`,
-    };
+      tonUsdPrice,
+    });
 
     startTransition(() => {
       setOrders((current) => [newOrder, ...current]);
     });
+    setAlarmSuccessMessage(`${getAssetSymbol(selectedAsset)} alarm set.`);
     setExecutionMessage(
       `${orderSide === "buy" ? "Buy-below" : "Sell-above"} alert armed for ${getAssetSymbol(selectedAsset)}.`,
+    );
+  }
+
+  function handleQuickAlert(
+    asset: SupportedAsset,
+    side: OrderSide,
+    target: number,
+    sourceLabel: string,
+  ) {
+    const newOrder = createAlertOrder({
+      asset,
+      side,
+      targetPrice: target,
+      tonUsdPrice,
+    });
+
+    setSelectedAssetAddress(asset.contractAddress);
+    setOrderSide(side);
+    setTargetPrice(target.toFixed(4));
+    setCurrentQuote(buildSpotQuoteSnapshot(asset, tonUsdPrice));
+    setQuoteError(undefined);
+    setAlarmSuccessMessage(`${getAssetSymbol(asset)} alarm set.`);
+    startTransition(() => {
+      setOrders((current) => [newOrder, ...current]);
+    });
+    setExecutionMessage(
+      `${sourceLabel} alert armed for ${getAssetSymbol(asset)} at $${formatNumber(target)}.`,
     );
   }
 
@@ -485,6 +559,19 @@ export default function App() {
     }
   }
 
+  function handleOpenSwap(asset: SupportedAsset, side: OrderSide) {
+    setWidgetOrder(
+      createAlertOrder({
+        asset,
+        side,
+        targetPrice:
+          Number(asset.dexPriceUsd || asset.thirdPartyPriceUsd || 0) || 0,
+        tonUsdPrice,
+      }),
+    );
+    setExecutionMessage(`Opening ${side === "buy" ? "buy" : "sell"} swap for ${getAssetSymbol(asset)}…`);
+  }
+
   function handleRemoveOrder(orderId: string) {
     setOrders((current) => current.filter((order) => order.id !== orderId));
     setAlerts((current) => current.filter((alert) => alert.orderId !== orderId));
@@ -496,6 +583,59 @@ export default function App() {
   function dismissAlert(alertId: string) {
     setAlerts((current) => current.filter((alert) => alert.id !== alertId));
     setSpotlightAlert((current) => (current?.id === alertId ? null : current));
+  }
+
+  function clearNotifications() {
+    setAlerts([]);
+    setAlertHistory([]);
+    setSpotlightAlert(null);
+    setExecutionMessage("Notifications cleared.");
+  }
+
+  function updateAlertSetting<K extends keyof AlertPreferences>(key: K, value: AlertPreferences[K]) {
+    setAlertSettings((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  async function enableBrowserAlerts() {
+    if (typeof window === "undefined" || !("Notification" in window)) {
+      setExecutionMessage("This browser does not support notifications.");
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      updateAlertSetting("browser", true);
+      setExecutionMessage("Browser alerts enabled.");
+    } else {
+      updateAlertSetting("browser", false);
+      setExecutionMessage("Browser alerts were not allowed.");
+    }
+  }
+
+  function runTestAlert() {
+    const alert: TriggerAlert = {
+      id: crypto.randomUUID(),
+      orderId: "demo-alert",
+      title: "Test alert",
+      body: "eXwallet alert systems are armed and ready.",
+      createdAt: new Date().toISOString(),
+    };
+
+    setAlerts((current) => [alert, ...current].slice(0, 6));
+    setAlertHistory((current) => [alert, ...current].slice(0, 12));
+    if (alertSettings.spotlight) {
+      setSpotlightAlert(alert);
+    }
+    playAlertCue(alertSettings);
+    if (alertSettings.browser && typeof window !== "undefined" && "Notification" in window) {
+      if (Notification.permission === "granted") {
+        void new Notification(alert.title, { body: alert.body });
+      }
+    }
+    setExecutionMessage(alert.body);
   }
 
   const heroOrders = orders.filter((order) => order.status !== "executed").length;
@@ -510,7 +650,7 @@ export default function App() {
       <div className="ambient ambient-left" />
       <div className="ambient ambient-right" />
       <main className="layout">
-        <Hero trackedCount={assets.length} activeOrders={heroOrders} />
+        <Hero activeOrders={heroOrders} />
 
         <section className="meta-bar">
           <div>
@@ -529,6 +669,37 @@ export default function App() {
             <span className="meta-label">TON / USD</span>
             <strong>{tonUsdPrice ? `$${formatNumber(tonUsdPrice)}` : "Loading USD..."}</strong>
           </div>
+        </section>
+
+        <section className="view-tabs">
+          <button
+            className={activeView === "home" ? "tab-active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveView("home")}
+          >
+            Home
+          </button>
+          <button
+            className={activeView === "alerts" ? "tab-active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveView("alerts")}
+          >
+            Alerts
+          </button>
+          <button
+            className={activeView === "swap" ? "tab-active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveView("swap")}
+          >
+            Swap
+          </button>
+          <button
+            className={activeView === "settings" ? "tab-active" : "tab-button"}
+            type="button"
+            onClick={() => setActiveView("settings")}
+          >
+            Settings
+          </button>
         </section>
 
         {executionMessage && <div className="banner">{executionMessage}</div>}
@@ -552,80 +723,227 @@ export default function App() {
             </div>
           </section>
         ) : null}
-        {alerts.length > 0 ? (
+
+        {activeView === "home" ? (
+          <>
+            <div className="dashboard-grid">
+              <PortfolioPanel
+                connected={connected}
+                portfolio={portfolio}
+                loading={portfolioLoading}
+                error={portfolioError}
+                onRefresh={() => void refreshPortfolio(address, true)}
+              />
+              <OrderComposer
+                assets={pricedAssets}
+                orderSide={orderSide}
+                setOrderSide={setOrderSide}
+                selectedAssetAddress={selectedAssetAddress}
+                setSelectedAssetAddress={setSelectedAssetAddress}
+                targetPrice={targetPrice}
+                setTargetPrice={setTargetPrice}
+                spotPriceUsd={liveSpotPriceUsd}
+                targetWarning={targetWarning}
+                currentQuote={currentQuote}
+                quoteError={quoteError}
+                successMessage={alarmSuccessMessage}
+                onOpenAlerts={() => setActiveView("alerts")}
+                onSubmit={handleCreateOrder}
+              />
+            </div>
+            <MarketPulse
+              assets={assetsLoading ? [] : pricedAssets}
+              orders={orders}
+              onQuickAlert={handleQuickAlert}
+            />
+          </>
+        ) : null}
+
+        {activeView === "alerts" ? (
+          <>
+            {alerts.length > 0 ? (
+              <section className="panel">
+                <div className="panel-header">
+                  <div>
+                    <p className="section-label">Alerts</p>
+                    <h2>Triggered alerts</h2>
+                  </div>
+                  <span className="section-note">These alerts are ready for execution</span>
+                </div>
+                <div className="alert-list">
+                  {alerts.map((alert) => (
+                    <article className="alert-card" key={alert.id}>
+                      <div>
+                        <strong>{alert.title}</strong>
+                        <p>{alert.body}</p>
+                        <span className="alert-time">{formatRelativeTime(alert.createdAt)}</span>
+                      </div>
+                      <div className="alert-actions">
+                        {orders.find((order) => order.id === alert.orderId)?.status === "triggered" ? (
+                          <button
+                            className="primary-button"
+                            type="button"
+                            onClick={() => {
+                              const order = orders.find((item) => item.id === alert.orderId);
+                              if (order) {
+                                void handleExecute(order);
+                              }
+                            }}
+                          >
+                            Execute
+                          </button>
+                        ) : null}
+                        <button className="ghost-button" type="button" onClick={() => dismissAlert(alert.id)}>
+                          Dismiss
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+            <OrderBoard
+              connected={connected}
+              orders={orders}
+              refreshing={syncingOrders}
+              onExecute={(order) => void handleExecute(order)}
+              onRemove={handleRemoveOrder}
+            />
+          </>
+        ) : null}
+
+        {activeView === "swap" ? (
           <section className="panel">
             <div className="panel-header">
               <div>
-                <p className="section-label">Alerts</p>
-                <h2>Triggered orders</h2>
+                <p className="section-label">Swap</p>
+                <h2>Open the STON widget</h2>
               </div>
-              <span className="section-note">These orders are ready for execution</span>
+              <span className="section-note">Direct swap flow without setting an alert</span>
             </div>
-            <div className="alert-list">
-              {alerts.map((alert) => (
-                <article className="alert-card" key={alert.id}>
-                  <div>
-                    <strong>{alert.title}</strong>
-                    <p>{alert.body}</p>
-                    <span className="alert-time">{formatRelativeTime(alert.createdAt)}</span>
-                  </div>
-                  <div className="alert-actions">
-                    {orders.find((order) => order.id === alert.orderId)?.status === "triggered" ? (
-                      <button
-                        className="primary-button"
-                        type="button"
-                        onClick={() => {
-                          const order = orders.find((item) => item.id === alert.orderId);
-                          if (order) {
-                            void handleExecute(order);
-                          }
-                        }}
-                      >
-                        Execute
-                      </button>
-                    ) : null}
-                    <button className="ghost-button" type="button" onClick={() => dismissAlert(alert.id)}>
-                      Dismiss
-                    </button>
-                  </div>
-                </article>
-              ))}
+            <div className="swap-cta">
+              <div className="composer-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  disabled={!selectedSwapAsset}
+                  onClick={() => selectedSwapAsset && handleOpenSwap(selectedSwapAsset, swapSide)}
+                >
+                  Open STON widget
+                </button>
+              </div>
             </div>
           </section>
         ) : null}
 
-        <div className="dashboard-grid">
-          <PortfolioPanel
-            connected={connected}
-            portfolio={portfolio}
-            loading={portfolioLoading}
-            error={portfolioError}
-            onRefresh={() => void refreshPortfolio(address, true)}
-          />
-          <OrderComposer
-            assets={pricedAssets}
-            orderSide={orderSide}
-            setOrderSide={setOrderSide}
-            selectedAssetAddress={selectedAssetAddress}
-            setSelectedAssetAddress={setSelectedAssetAddress}
-            targetPrice={targetPrice}
-            setTargetPrice={setTargetPrice}
-            spotPriceUsd={liveSpotPriceUsd}
-            targetWarning={targetWarning}
-            currentQuote={currentQuote}
-            quoteError={quoteError}
-            onSubmit={handleCreateOrder}
-          />
-        </div>
+        {activeView === "settings" ? (
+          <section className="panel footer-panel">
+            <div className="panel-header">
+              <div>
+                <p className="section-label">Settings</p>
+                <h2>Notifications and reference links</h2>
+              </div>
+              <div className="order-actions">
+                <button className="ghost-button" type="button" onClick={clearNotifications}>
+                  Clear notifications
+                </button>
+                <button className="primary-button" type="button" onClick={runTestAlert}>
+                  Test alert
+                </button>
+              </div>
+            </div>
+            <details className="hint-card">
+              <summary>Alarm settings</summary>
+              <div className="hint-copy">
+                <div className="alert-settings-grid">
+                  <label className="toggle-card">
+                    <div>
+                      <strong>Browser alerts</strong>
+                      <span>Show native browser notifications when a price is hit.</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={alertSettings.browser}
+                      onChange={(event) => updateAlertSetting("browser", event.target.checked)}
+                    />
+                  </label>
+                  <label className="toggle-card">
+                    <div>
+                      <strong>Sound cue</strong>
+                      <span>Play a short alert tone when a trigger fires.</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={alertSettings.sound}
+                      onChange={(event) => updateAlertSetting("sound", event.target.checked)}
+                    />
+                  </label>
+                  <label className="toggle-card">
+                    <div>
+                      <strong>Vibration</strong>
+                      <span>Use device vibration when supported.</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={alertSettings.vibration}
+                      onChange={(event) => updateAlertSetting("vibration", event.target.checked)}
+                    />
+                  </label>
+                  <label className="toggle-card">
+                    <div>
+                      <strong>Spotlight mode</strong>
+                      <span>Show a full in-app trigger panel that is hard to miss.</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={alertSettings.spotlight}
+                      onChange={(event) => updateAlertSetting("spotlight", event.target.checked)}
+                    />
+                  </label>
+                </div>
+                <div className="alert-center-actions">
+                  <button className="ghost-button" type="button" onClick={() => void enableBrowserAlerts()}>
+                    Request browser permission
+                  </button>
+                  <span className="section-note">
+                    Recent triggers are stored locally so the demo still feels alive after refresh.
+                  </span>
+                </div>
+              </div>
+            </details>
+            {alertHistory.length > 0 ? (
+              <div className="alert-history">
+                {alertHistory.slice(0, 4).map((alert) => (
+                  <div className="alert-history-row" key={alert.id}>
+                    <div>
+                      <strong>{alert.title}</strong>
+                      <span>{alert.body}</span>
+                    </div>
+                    <small>{formatRelativeTime(alert.createdAt)}</small>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            <div className="notes-grid">
+              <div>
+                <strong>STON.fi</strong>
+                <p>Routing, asset data, widget execution, and swap infrastructure.</p>
+                <a className="text-link" href="https://docs.ston.fi/" target="_blank" rel="noreferrer">Open docs</a>
+              </div>
+              <div>
+                <strong>TON AppKit</strong>
+                <p>Wallet connection, Tonkeeper integration, and TON app UX primitives.</p>
+                <a className="text-link" href="https://docs.ton.org/ecosystem/appkit/overview" target="_blank" rel="noreferrer">Open docs</a>
+              </div>
+              <div>
+                <strong>Contest framing</strong>
+                <p>This MVP is positioned as a trading alert assistant with user-signed execution.</p>
+                <a className="text-link" href="https://docs.privy.io/recipes/use-tier-2#ton" target="_blank" rel="noreferrer">Privy TON recipe</a>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
-        <MarketPulse assets={assetsLoading ? [] : pricedAssets} orders={orders} />
-        <OrderBoard
-          connected={connected}
-          orders={orders}
-          refreshing={syncingOrders}
-          onExecute={(order) => void handleExecute(order)}
-          onRemove={handleRemoveOrder}
-        />
         {widgetOrder ? (
           <SwapWidgetModal
             open={Boolean(widgetOrder)}
@@ -635,38 +953,6 @@ export default function App() {
             onClose={() => setWidgetOrder(null)}
           />
         ) : null}
-
-        <section className="panel footer-panel">
-          <div className="panel-header">
-            <div>
-              <p className="section-label">Contest Notes</p>
-              <h2>What this MVP already demonstrates</h2>
-            </div>
-          </div>
-          <div className="notes-grid">
-            <div>
-              <strong>Trader-first UX</strong>
-              <p>
-                This is intentionally framed as a trading alert assistant, not
-                a generic wallet clone.
-              </p>
-            </div>
-            <div>
-              <strong>Safe promise</strong>
-              <p>
-                Alerts are monitored off-chain and the user still signs the
-                final swap in wallet.
-              </p>
-            </div>
-            <div>
-              <strong>Stretch-ready</strong>
-              <p>
-                The same shell can later add Privy, alerts, or Rust-powered
-                signal logic without redesigning the product.
-              </p>
-            </div>
-          </div>
-        </section>
       </main>
     </div>
   );

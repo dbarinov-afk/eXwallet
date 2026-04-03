@@ -64,6 +64,13 @@ export type TriggerAlert = {
   createdAt: string;
 };
 
+export type AlertPreferences = {
+  browser: boolean;
+  sound: boolean;
+  vibration: boolean;
+  spotlight: boolean;
+};
+
 export type PortfolioEntry = {
   id: string;
   symbol: string;

@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import type { OrderSide, QuoteSnapshot, SupportedAsset } from "../types";
 import { formatNumber, truncateAddress } from "../lib/format";
 import { getAssetName, getAssetSymbol } from "../lib/ston";
@@ -15,6 +15,8 @@ type ComposerProps = {
   targetWarning?: string;
   currentQuote?: QuoteSnapshot;
   quoteError?: string;
+  successMessage?: string;
+  onOpenAlerts: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 };
 
@@ -30,18 +32,38 @@ export function OrderComposer({
   targetWarning,
   currentQuote,
   quoteError,
+  successMessage,
+  onOpenAlerts,
   onSubmit,
 }: ComposerProps) {
   const selectedAsset = assets.find((asset) => asset.contractAddress === selectedAssetAddress);
+  const [customPercent, setCustomPercent] = useState("7");
+  const [warningAcknowledged, setWarningAcknowledged] = useState(false);
+
+  const customDelta = Math.max(0.1, Number(customPercent) || 0);
+  const customTarget =
+    spotPriceUsd
+      ? orderSide === "buy"
+        ? spotPriceUsd * (1 - customDelta / 100)
+        : spotPriceUsd * (1 + customDelta / 100)
+      : undefined;
+
+  useEffect(() => {
+    setWarningAcknowledged(false);
+  }, [targetWarning, orderSide, selectedAssetAddress, targetPrice]);
 
   return (
     <section className="panel">
       <div className="panel-header">
         <div>
           <p className="section-label">Alert Builder</p>
-          <h2>Create a price alert</h2>
+          <h2>Set an alarm for a token price</h2>
         </div>
         <span className="section-note">Save once, auto-monitor every 20s</span>
+      </div>
+      <div className="builder-highlight">
+        <strong>Set the alarm</strong>
+        <span>Choose a token, pick the direction, and save the price level you want to watch.</span>
       </div>
       <details className="hint-card">
         <summary>How alerts work</summary>
@@ -140,12 +162,135 @@ export function OrderComposer({
               Current spot reference: ${formatNumber(spotPriceUsd)}
             </span>
           ) : null}
-          {targetWarning ? <span className="field-warning">{targetWarning}</span> : null}
         </label>
+        {targetWarning ? (
+          <div className="warning-card">
+            <strong>Check this alert before saving</strong>
+            <span>{targetWarning}</span>
+            <button
+              className={warningAcknowledged ? "primary-button warning-button acknowledged" : "primary-button warning-button"}
+              type="button"
+              onClick={() => setWarningAcknowledged(true)}
+            >
+              {warningAcknowledged ? "Warning confirmed" : "I understand, save anyway"}
+            </button>
+          </div>
+        ) : null}
+        {spotPriceUsd ? (
+          <div className="preset-row">
+            {orderSide === "buy" ? (
+              <>
+                <button
+                  className="ghost-button preset-button"
+                  type="button"
+                  onClick={() => setTargetPrice((spotPriceUsd * 0.98).toFixed(4))}
+                >
+                  -2%
+                </button>
+                <button
+                  className="ghost-button preset-button"
+                  type="button"
+                  onClick={() => setTargetPrice((spotPriceUsd * 0.97).toFixed(4))}
+                >
+                  -3%
+                </button>
+                <button
+                  className="ghost-button preset-button"
+                  type="button"
+                  onClick={() => setTargetPrice((spotPriceUsd * 0.95).toFixed(4))}
+                >
+                  -5%
+                </button>
+                <button
+                  className="ghost-button preset-button"
+                  type="button"
+                  onClick={() => setTargetPrice((spotPriceUsd * 0.9).toFixed(4))}
+                >
+                  -10%
+                </button>
+                <button
+                  className="ghost-button preset-button"
+                  type="button"
+                  onClick={() => setTargetPrice((spotPriceUsd * 0.85).toFixed(4))}
+                >
+                  -15%
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  className="ghost-button preset-button"
+                  type="button"
+                  onClick={() => setTargetPrice((spotPriceUsd * 1.02).toFixed(4))}
+                >
+                  +2%
+                </button>
+                <button
+                  className="ghost-button preset-button"
+                  type="button"
+                  onClick={() => setTargetPrice((spotPriceUsd * 1.03).toFixed(4))}
+                >
+                  +3%
+                </button>
+                <button
+                  className="ghost-button preset-button"
+                  type="button"
+                  onClick={() => setTargetPrice((spotPriceUsd * 1.05).toFixed(4))}
+                >
+                  +5%
+                </button>
+                <button
+                  className="ghost-button preset-button"
+                  type="button"
+                  onClick={() => setTargetPrice((spotPriceUsd * 1.1).toFixed(4))}
+                >
+                  +10%
+                </button>
+                <button
+                  className="ghost-button preset-button"
+                  type="button"
+                  onClick={() => setTargetPrice((spotPriceUsd * 1.15).toFixed(4))}
+                >
+                  +15%
+                </button>
+              </>
+            )}
+            <input
+              className="preset-percent-input"
+              inputMode="decimal"
+              value={customPercent}
+              onChange={(event) => setCustomPercent(event.target.value)}
+              placeholder="7"
+            />
+            <span className="field-hint">
+              {customTarget ? `Custom target: $${customTarget.toFixed(4)}` : ""}
+            </span>
+            <button
+              className="ghost-button preset-button"
+              type="button"
+              onClick={() => customTarget && setTargetPrice(customTarget.toFixed(4))}
+            >
+              Apply {customDelta}%
+            </button>
+          </div>
+        ) : null}
         <div className="composer-actions">
-          <button className="primary-button" type="submit" disabled={assets.length === 0}>
-            Save alert
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={assets.length === 0 || Boolean(targetWarning && !warningAcknowledged)}
+          >
+            Set alarm
           </button>
+          {successMessage ? (
+            <div className="alarm-success">
+              <span className="alarm-success-dot" />
+              <span>{successMessage}</span>
+              <button className="text-link-button" type="button" onClick={onOpenAlerts}>
+                View alerts
+              </button>
+            </div>
+          ) : null}
         </div>
       </form>
       <div className="quote-card">
