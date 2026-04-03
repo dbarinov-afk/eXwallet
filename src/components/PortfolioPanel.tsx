@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import type { PortfolioEntry } from "../types";
 import {
   formatCurrency,
@@ -21,8 +22,61 @@ export function PortfolioPanel({
   error,
   onRefresh,
 }: PortfolioPanelProps) {
+  const [showAllAssets, setShowAllAssets] = useState(false);
   const pricedTotal = portfolio.reduce((sum, entry) => sum + (entry.usdValue || 0), 0);
   const pricedCount = portfolio.filter((entry) => entry.usdValue && entry.usdValue > 0).length;
+  const { featuredAssets, otherAssets } = useMemo(() => {
+    const featuredSymbols = ["TON", "STON", "USDT"];
+    const symbolRank = new Map(featuredSymbols.map((symbol, index) => [symbol, index]));
+
+    const featured = portfolio
+      .filter((entry) => symbolRank.has(entry.symbol.toUpperCase()))
+      .sort(
+        (left, right) =>
+          (symbolRank.get(left.symbol.toUpperCase()) ?? Number.MAX_SAFE_INTEGER) -
+          (symbolRank.get(right.symbol.toUpperCase()) ?? Number.MAX_SAFE_INTEGER),
+      );
+
+    const others = portfolio.filter((entry) => !symbolRank.has(entry.symbol.toUpperCase()));
+
+    return {
+      featuredAssets: featured,
+      otherAssets: others,
+    };
+  }, [portfolio]);
+
+  const visibleAssets = featuredAssets.length > 0 ? featuredAssets : portfolio;
+
+  function renderAssetRow(entry: PortfolioEntry) {
+    return (
+      <div className="asset-row" key={entry.id}>
+        {entry.imageUrl ? (
+          <img
+            className="asset-icon"
+            src={entry.imageUrl}
+            alt={`${entry.symbol} icon`}
+          />
+        ) : (
+          <div className="asset-badge" style={{ background: entry.accent }}>
+            {initialsForToken(entry.symbol, entry.name)}
+          </div>
+        )}
+        <div className="asset-copy">
+          <strong>{entry.symbol}</strong>
+          <span>{entry.name}</span>
+          {entry.address ? (
+            <small className="asset-address">{truncateAddress(entry.address)}</small>
+          ) : null}
+        </div>
+        <div className="asset-values">
+          <strong>{formatNumber(entry.balance)}</strong>
+          <span>
+            {entry.usdValue ? formatCurrency(entry.usdValue) : "USD price not available"}
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <section className="panel">
@@ -69,36 +123,29 @@ export function PortfolioPanel({
       ) : error ? (
         <div className="empty-state">{error}</div>
       ) : (
-        <div className="asset-list">
-          {portfolio.map((entry) => (
-            <div className="asset-row" key={entry.id}>
-              {entry.imageUrl ? (
-                <img
-                  className="asset-icon"
-                  src={entry.imageUrl}
-                  alt={`${entry.symbol} icon`}
-                />
-              ) : (
-                <div className="asset-badge" style={{ background: entry.accent }}>
-                  {initialsForToken(entry.symbol, entry.name)}
-                </div>
-              )}
-              <div className="asset-copy">
-                <strong>{entry.symbol}</strong>
-                <span>{entry.name}</span>
-                {entry.address ? (
-                  <small className="asset-address">{truncateAddress(entry.address)}</small>
-                ) : null}
+        <>
+          <div className="asset-list">
+            {visibleAssets.map(renderAssetRow)}
+          </div>
+          {otherAssets.length > 0 ? (
+            <details
+              className="portfolio-more"
+              open={showAllAssets}
+              onToggle={(event) =>
+                setShowAllAssets((event.currentTarget as HTMLDetailsElement).open)
+              }
+            >
+              <summary>
+                {showAllAssets
+                  ? "Hide other assets"
+                  : `Show ${otherAssets.length} other asset${otherAssets.length === 1 ? "" : "s"}`}
+              </summary>
+              <div className="asset-list portfolio-more-list">
+                {otherAssets.map(renderAssetRow)}
               </div>
-              <div className="asset-values">
-                <strong>{formatNumber(entry.balance)}</strong>
-                <span>
-                  {entry.usdValue ? formatCurrency(entry.usdValue) : "USD price not available"}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+            </details>
+          ) : null}
+        </>
       )}
     </section>
   );

@@ -92,6 +92,5 @@ export async function getPortfolio(address: string): Promise<PortfolioEntry[]> {
       const rightValue = right.usdValue || right.balance;
       const leftValue = left.usdValue || left.balance;
       return rightValue - leftValue;
-    })
-    .slice(0, 6);
+    });
 }

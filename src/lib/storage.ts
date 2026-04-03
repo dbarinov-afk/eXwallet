@@ -2,7 +2,7 @@ import type { PortfolioEntry, SupportedAsset, TargetOrder } from "../types";
 
 const STORAGE_KEY = "exwallet.target-orders";
 const ASSET_CACHE_KEY = "exwallet.cached-assets";
-const PORTFOLIO_CACHE_KEY = "exwallet.cached-portfolio";
+const PORTFOLIO_CACHE_PREFIX = "exwallet.cached-portfolio";
 
 export function loadOrders(): TargetOrder[] {
   if (typeof window === "undefined") {
@@ -56,28 +56,48 @@ export function saveCachedAssets(assets: SupportedAsset[]) {
   window.localStorage.setItem(ASSET_CACHE_KEY, JSON.stringify(assets));
 }
 
-export function loadCachedPortfolio(): PortfolioEntry[] {
+function portfolioCacheKey(address: string) {
+  return `${PORTFOLIO_CACHE_PREFIX}:${address}`;
+}
+
+export function loadCachedPortfolio(address: string): {
+  entries: PortfolioEntry[];
+  savedAt?: number;
+} {
   if (typeof window === "undefined") {
-    return [];
+    return { entries: [] };
   }
 
   try {
-    const raw = window.localStorage.getItem(PORTFOLIO_CACHE_KEY);
+    const raw = window.localStorage.getItem(portfolioCacheKey(address));
     if (!raw) {
-      return [];
+      return { entries: [] };
     }
 
-    const parsed = JSON.parse(raw) as PortfolioEntry[];
-    return Array.isArray(parsed) ? parsed : [];
+    const parsed = JSON.parse(raw) as { entries?: PortfolioEntry[]; savedAt?: number } | PortfolioEntry[];
+    if (Array.isArray(parsed)) {
+      return { entries: parsed };
+    }
+
+    return {
+      entries: Array.isArray(parsed.entries) ? parsed.entries : [],
+      savedAt: parsed.savedAt,
+    };
   } catch {
-    return [];
+    return { entries: [] };
   }
 }
 
-export function saveCachedPortfolio(entries: PortfolioEntry[]) {
+export function saveCachedPortfolio(address: string, entries: PortfolioEntry[]) {
   if (typeof window === "undefined") {
     return;
   }
 
-  window.localStorage.setItem(PORTFOLIO_CACHE_KEY, JSON.stringify(entries));
+  window.localStorage.setItem(
+    portfolioCacheKey(address),
+    JSON.stringify({
+      savedAt: Date.now(),
+      entries,
+    }),
+  );
 }

@@ -448,6 +448,25 @@ button {
   margin: 0.35rem 0;
 }
 
+.portfolio-more {
+  margin-top: 0.9rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(123, 142, 177, 0.12);
+  background: rgba(10, 14, 23, 0.72);
+  overflow: hidden;
+}
+
+.portfolio-more summary {
+  padding: 0.95rem 1rem;
+  cursor: pointer;
+  color: #dce7ff;
+  font-weight: 600;
+}
+
+.portfolio-more-list {
+  padding: 0 0.75rem 0.75rem;
+}
+
 .composer {
   display: grid;
   gap: 0.95rem;

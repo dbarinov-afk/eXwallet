@@ -103,6 +103,7 @@ function buildSpotQuoteSnapshot(asset: SupportedAsset, tonUsdPrice: number): Quo
 }
 
 export default function App() {
+  const PORTFOLIO_CACHE_TTL_MS = 2 * 60 * 1000;
   const address = useTonAddress();
   const [tonConnectUI] = useTonConnectUI();
   const [assets, setAssets] = useState<SupportedAsset[]>([]);
@@ -253,9 +254,24 @@ export default function App() {
     return () => window.clearInterval(timer);
   }, [orders]);
 
-  async function refreshPortfolio(walletAddress = address) {
+  async function refreshPortfolio(walletAddress = address, force = false) {
     if (!walletAddress) {
       return;
+    }
+
+    const cachedPortfolio = loadCachedPortfolio(walletAddress);
+    const cacheIsFresh =
+      !force &&
+      cachedPortfolio.savedAt &&
+      Date.now() - cachedPortfolio.savedAt < PORTFOLIO_CACHE_TTL_MS;
+
+    if (cachedPortfolio.entries.length > 0) {
+      setPortfolio(cachedPortfolio.entries);
+      if (cacheIsFresh) {
+        setPortfolioError(undefined);
+        setPortfolioLoading(false);
+        return;
+      }
     }
 
     setPortfolioLoading(true);
@@ -275,6 +291,9 @@ export default function App() {
           Number(asset.dexPriceUsd || asset.thirdPartyPriceUsd || 0) || undefined,
         ]),
       );
+      if (tonUsdPrice > 0) {
+        priceBySymbol.set("TON", tonUsdPrice);
+      }
       const enriched = entries.map((entry) => {
         const fallbackPrice = priceByAddress.get(entry.address || "") || priceBySymbol.get(entry.symbol);
         return {
@@ -285,16 +304,15 @@ export default function App() {
         };
       });
       setPortfolio(enriched);
-      saveCachedPortfolio(enriched);
+      saveCachedPortfolio(walletAddress, enriched);
       setNetworkWarning(undefined);
       if (enriched.length === 0) {
         setPortfolioError("No balances found for this wallet yet.");
       }
     } catch (error) {
       console.error("Failed to load portfolio", error);
-      const cachedPortfolio = loadCachedPortfolio();
-      if (cachedPortfolio.length > 0) {
-        setPortfolio(cachedPortfolio);
+      if (cachedPortfolio.entries.length > 0) {
+        setPortfolio(cachedPortfolio.entries);
         setPortfolioError("TonAPI is unreachable. Showing your last cached balances.");
         setNetworkWarning("Some TON services are unreachable right now. Cached data is shown.");
       } else {
@@ -582,7 +600,7 @@ export default function App() {
             portfolio={portfolio}
             loading={portfolioLoading}
             error={portfolioError}
-            onRefresh={() => void refreshPortfolio()}
+            onRefresh={() => void refreshPortfolio(address, true)}
           />
           <OrderComposer
             assets={pricedAssets}
