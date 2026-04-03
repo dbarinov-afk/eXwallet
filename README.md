@@ -45,6 +45,7 @@ Instead of pretending to be a fully autonomous on-chain limit order protocol, eX
 - Embedded STON widget execution modal with retry logic and fallback to the STON site
 - Fold-out TradingView market charts for supported tokens
 - Visual sparkline-style token cards for fast scanning
+- Clickable price rhythm strips that expand inline into full charts
 - Local caching for balances and market data to soften rate limits and network hiccups
 
 ## Product Structure

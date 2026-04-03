@@ -493,17 +493,25 @@ button:disabled {
 .chart-shell,
 .chart-shell .tradingview-widget-container {
   width: 100%;
-  min-height: 420px;
+  height: 420px;
+}
+
+.chart-shell .tradingview-widget-container {
+  display: flex;
+  flex-direction: column;
 }
 
 .chart-shell .tradingview-widget-container__widget {
-  height: 380px;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .chart-shell .tradingview-widget-copyright {
-  margin-top: 0.55rem;
-  font-size: 0.76rem;
+  margin-top: 0.18rem;
+  font-size: 0.68rem;
+  line-height: 1.1;
   color: #92a5ce;
+  text-align: right;
 }
 
 .chart-shell .tradingview-widget-copyright a {
@@ -843,6 +851,12 @@ button:disabled {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.watch-card-expanded {
+  grid-column: 1 / -1;
+  width: min(1120px, 92%);
+  justify-self: center;
+}
+
 .watch-symbol {
   display: inline-grid;
   place-items: center;
@@ -909,6 +923,16 @@ button:disabled {
     rgba(10, 14, 23, 0.82);
 }
 
+.watch-sparkline-toggle {
+  width: 100%;
+  border: 1px solid rgba(123, 142, 177, 0.12);
+  text-align: left;
+}
+
+.watch-sparkline-toggle:hover {
+  border-color: rgba(123, 142, 177, 0.28);
+}
+
 .watch-sparkline-copy {
   display: flex;
   align-items: center;
@@ -925,6 +949,21 @@ button:disabled {
   width: 100%;
   height: 56px;
   margin-top: 0.55rem;
+}
+
+.watch-chart-panel {
+  margin-top: 0.8rem;
+  border-radius: 1rem;
+  overflow: hidden;
+}
+
+.watch-chart-panel .chart-shell,
+.watch-chart-panel .chart-shell .tradingview-widget-container {
+  height: 520px;
+}
+
+.watch-chart-panel .chart-shell .tradingview-widget-container__widget {
+  height: auto;
 }
 
 .watch-actions {

@@ -4,6 +4,7 @@ const TRADINGVIEW_SYMBOLS: Record<string, string> = {
   NOT: "BINANCE:NOTUSDT",
   DOGS: "BINANCE:DOGSUSDT",
   HMSTR: "BINANCE:HMSTRUSDT",
+  USDE: "USDEUSDT",
 };
 
 export function getTradingViewSymbol(symbol?: string) {

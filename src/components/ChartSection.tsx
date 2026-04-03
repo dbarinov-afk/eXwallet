@@ -21,7 +21,7 @@ export function ChartSection({ symbol, title }: ChartSectionProps) {
           </>
         ) : (
           <p>
-            TradingView is not mapped for this token yet. Switch to TON, STON, NOT, DOGS, or HMSTR to see the embedded chart.
+            TradingView is not mapped for this token yet. Switch to TON, STON, USDe, NOT, DOGS, or HMSTR to see the embedded chart.
           </p>
         )}
       </div>

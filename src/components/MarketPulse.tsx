@@ -3,6 +3,7 @@ import type { SupportedAsset, TargetOrder } from "../types";
 import { formatNumber } from "../lib/format";
 import { getAssetName, getAssetSymbol } from "../lib/ston";
 import { getTradingViewSymbol } from "../lib/tradingview";
+import { TradingViewChart } from "./TradingViewChart";
 
 type MarketPulseProps = {
   assets: SupportedAsset[];
@@ -41,6 +42,7 @@ function buildSparkline(symbol: string, livePrice: number) {
 export function MarketPulse({ assets, orders, onQuickAlert }: MarketPulseProps) {
   const [customPercent, setCustomPercent] = useState("7");
   const [armedLabel, setArmedLabel] = useState<string>();
+  const [expandedChartAsset, setExpandedChartAsset] = useState<string>();
   const buyPresets = [2, 3, 5, 10];
   const sellPresets = [2, 3, 5, 10];
 
@@ -71,8 +73,12 @@ export function MarketPulse({ assets, orders, onQuickAlert }: MarketPulseProps) 
           const customDelta = Math.max(0.1, Number(customPercent) || 0);
           const symbol = getAssetSymbol(asset);
           const chartReady = Boolean(getTradingViewSymbol(symbol));
+          const chartOpen = expandedChartAsset === asset.contractAddress;
           return (
-            <article className="watch-card" key={asset.contractAddress}>
+            <article
+              className={chartOpen ? "watch-card watch-card-expanded" : "watch-card"}
+              key={asset.contractAddress}
+            >
               <div className="watch-top">
                 {asset.meta?.imageUrl ? (
                   <img
@@ -98,32 +104,57 @@ export function MarketPulse({ assets, orders, onQuickAlert }: MarketPulseProps) 
                 </div>
               </div>
               {livePrice ? (
-                <div className="watch-sparkline-shell">
-                  <div className="watch-sparkline-copy">
-                    <span className="meta-label">Price rhythm</span>
-                    <strong>Use this to sanity-check the alarm before saving it.</strong>
-                  </div>
-                  <svg
-                    className="watch-sparkline"
-                    viewBox="0 0 198 48"
-                    aria-hidden="true"
+                <>
+                  <button
+                    className={chartReady ? "watch-sparkline-shell watch-sparkline-toggle" : "watch-sparkline-shell"}
+                    type="button"
+                    disabled={!chartReady}
+                    onClick={() =>
+                      setExpandedChartAsset((current) =>
+                        current === asset.contractAddress ? undefined : asset.contractAddress,
+                      )
+                    }
                   >
-                    <defs>
-                      <linearGradient id={`spark-${asset.contractAddress}`} x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#31d0aa" />
-                        <stop offset="100%" stopColor="#7cb8ff" />
-                      </linearGradient>
-                    </defs>
-                    <polyline
-                      fill="none"
-                      stroke={`url(#spark-${asset.contractAddress})`}
-                      strokeWidth="3"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      points={buildSparkline(symbol, livePrice)}
-                    />
-                  </svg>
-                </div>
+                    <div className="watch-sparkline-copy">
+                      <span className="meta-label">Price rhythm</span>
+                      <strong>
+                        {chartReady
+                          ? chartOpen
+                            ? "Click to hide full chart."
+                            : "Click to expand into a full chart."
+                          : "Chart is not mapped for this token."}
+                      </strong>
+                    </div>
+                    <svg
+                      className="watch-sparkline"
+                      viewBox="0 0 198 48"
+                      aria-hidden="true"
+                    >
+                      <defs>
+                        <linearGradient id={`spark-${asset.contractAddress}`} x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#31d0aa" />
+                          <stop offset="100%" stopColor="#7cb8ff" />
+                        </linearGradient>
+                      </defs>
+                      <polyline
+                        fill="none"
+                        stroke={`url(#spark-${asset.contractAddress})`}
+                        strokeWidth="3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        points={buildSparkline(symbol, livePrice)}
+                      />
+                    </svg>
+                  </button>
+                  {chartReady && chartOpen ? (
+                    <div className="watch-chart-panel">
+                      <TradingViewChart
+                        symbol={getTradingViewSymbol(symbol)!}
+                        title={getAssetName(asset)}
+                      />
+                    </div>
+                  ) : null}
+                </>
               ) : null}
               {livePrice ? (
                 <div className="watch-actions">
